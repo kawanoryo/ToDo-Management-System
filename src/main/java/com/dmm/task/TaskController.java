@@ -2,10 +2,9 @@ package com.dmm.task;
 
 import java.time.DayOfWeek;
 import java.time.LocalDate;
-import java.time.format.TextStyle;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -30,12 +29,12 @@ public class TaskController {
 	String loginForm() {
 		return "login";
 	}
-	
+
 	@GetMapping("/main/create/{date}")
 	public String create(Model model, @PathVariable @DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
 		return "create";
 	}
-	
+
 	@Autowired
 	private TaskRepository repo;
 
@@ -43,12 +42,12 @@ public class TaskController {
 	public String taskCreate(Model model, TaskForm form, @AuthenticationPrincipal AccountUserDetails user) {
 
 		Tasks task = new Tasks();
-	    task.setName(user.getName());
-	    task.setTitle(form.getTitle());
-	    task.setText(form.getText());
-	    task.setDate(form.getDate().atTime(0, 0));
+		task.setName(user.getName());
+		task.setTitle(form.getTitle());
+		task.setText(form.getText());
+		task.setDate(form.getDate().atTime(0, 0));
 
-	    repo.save(task);
+		repo.save(task);
 
 		return "redirect:/main";
 	}
@@ -56,58 +55,64 @@ public class TaskController {
 	@GetMapping("/main/edit/{id}")
 	public String edittask(@PathVariable Integer id, Model model) {
 		Tasks task = repo.findById(id).orElse(null);
-		
+
 		if (task != null) {
-            model.addAttribute("task", task);
-            return "edit";
-        } else {
-            return "redirect:/main";
-        }	
+			model.addAttribute("task", task);
+			return "edit";
+		} else {
+			return "redirect:/main";
+		}
 	}
-	
-	
+
 	@PostMapping("/main/edit/{id}")
-	public String saveEditedTask(Model model, TaskForm form, @PathVariable Integer id, @AuthenticationPrincipal AccountUserDetails user) {
-		
+	public String saveEditedTask(Model model, TaskForm form, @PathVariable Integer id,
+			@AuthenticationPrincipal AccountUserDetails user) {
+
 		Tasks task = repo.findById(form.getId()).orElse(null);
 
-        if (task != null) {
-            task.setTitle(form.getTitle());
-            task.setText(form.getText());
-            task.setDate(form.getDate().atTime(0, 0));
-            task.setDone(form.isDone());
-            repo.save(task);
-        }
-	    return "redirect:/main";
+		if (task != null) {
+			task.setTitle(form.getTitle());
+			task.setText(form.getText());
+			task.setDate(form.getDate().atTime(0, 0));
+			task.setDone(form.isDone());
+			repo.save(task);
+		}
+		return "redirect:/main";
 	}
-	
+
 	@PostMapping("/main/delete/{id}")
-    public String deleteTask(@PathVariable Integer id, @AuthenticationPrincipal AccountUserDetails user) {
+	public String deleteTask(@PathVariable Integer id, @AuthenticationPrincipal AccountUserDetails user) {
 		Tasks task = repo.findById(id).orElse(null);
 
-        if (task != null) {
-     
-            repo.delete(task);
-        }
+		if (task != null) {
 
-        return "redirect:/main";
-    }
-	
+			repo.delete(task);
+		}
+
+		return "redirect:/main";
+	}
 
 	@GetMapping("/main")
-	public String main(@AuthenticationPrincipal AccountUserDetails user,Model model, TaskRepository taskRepository, TaskForm form) {
+	public String main(Model model, @AuthenticationPrincipal AccountUserDetails user,
+			@DateTimeFormat(pattern = "yyyy-MM-dd") LocalDate date) {
 
 		List<List<LocalDate>> month = new ArrayList<>();
 
 		List<LocalDate> week = new ArrayList<>();
 
 		LocalDate day, start, end;
+		if (date == null) {
 
-		day = LocalDate.now();
-		day = LocalDate.of(day.getYear(), day.getMonthValue(), 1);
-		
-		
-		model.addAttribute("month", day.getMonth().getDisplayName(TextStyle.FULL, Locale.getDefault()));
+			day = LocalDate.now();
+			day = LocalDate.of(day.getYear(), day.getMonthValue(), 1);
+		} else {
+			day = date;
+		}
+
+		model.addAttribute("month", day.format(DateTimeFormatter.ofPattern("yyyy年MM月")));
+
+		model.addAttribute("prev", day.minusMonths(1));
+		model.addAttribute("next", day.plusMonths(1));
 
 		DayOfWeek w = day.getDayOfWeek();
 		day = day.minusDays(w.getValue());
@@ -154,33 +159,28 @@ public class TaskController {
 
 		}
 		month.add(week);
-		
+
 		end = day;
-	    MultiValueMap<LocalDate, Tasks> tasks = new LinkedMultiValueMap<LocalDate, Tasks>();
-		
-	    List<Tasks> list;
-	    
+		MultiValueMap<LocalDate, Tasks> tasks = new LinkedMultiValueMap<LocalDate, Tasks>();
 
-	    // 管理者だったら
-	    if(user.getUsername().equals("admin")) {
-	    	
-	    	list = repo.findAllByDateBetween(start.atTime(0, 0),end.atTime(0, 0));
-	    
-	    	
-	    } else {  // ユーザーだったら
-	      
-	    	list = repo.findByDateBetween(start.atTime(0, 0),end.atTime(0, 0), user.getName());
-	    }
-	    
-	    for(Tasks task : list) {
-	        tasks.add(task.getDate().toLocalDate(), task);
-	      }
-	    
-	    
-	    model.addAttribute("matrix", month);
-	    
-	    model.addAttribute("tasks", tasks);
+		List<Tasks> list;
 
+		if (user.getUsername().equals("admin")) {
+
+			list = repo.findAllByDateBetween(start.atTime(0, 0), end.atTime(0, 0));
+
+		} else {
+
+			list = repo.findByDateBetween(start.atTime(0, 0), end.atTime(0, 0), user.getName());
+		}
+
+		for (Tasks task : list) {
+			tasks.add(task.getDate().toLocalDate(), task);
+		}
+
+		model.addAttribute("matrix", month);
+
+		model.addAttribute("tasks", tasks);
 
 		return "main";
 	}
